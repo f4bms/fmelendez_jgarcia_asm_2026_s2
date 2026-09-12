@@ -5,7 +5,7 @@ PYTHON ?= python3
 all: graphics comp_time
 
 graphics:
-	$(PYTHON) graphics.py
+	cd 'FFT&DFT' && $(PYTHON) graphics.py
 
 comp_time:
-	$(PYTHON) comp_time.py
+	cd 'FFT&DFT' && $(PYTHON) comp_time.py
