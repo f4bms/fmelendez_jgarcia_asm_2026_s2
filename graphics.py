@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from fft import fft_radix2
 from signals import (
@@ -10,13 +11,17 @@ from signals import (
     senal_con_ruido,
     pulso_rectangular,
     secuencia_de_pulsos,
+    chirp_lineal,
 )
+
+CARPETA_GRAFICAS = Path(__file__).resolve().parent / "graphics"
+CARPETA_GRAFICAS.mkdir(exist_ok=True)
 
 # datos que se deben de modificar según lo que se quiera analizar
 fs = 8000
 N = 256
 
-senales = {
+signals = {
     "Tono puro (500 Hz)": tono_puro(N, fs, f0=500),
     "Suma de tonos (300, 800, 1500 Hz)": suma_de_tonos(N, fs, [300, 800, 1500]),
     "Tono con ruido (SNR 10 dB)": senal_con_ruido(tono_puro(N, fs, f0=500), snr_db=10),
@@ -24,9 +29,10 @@ senales = {
     "Secuencia de 4 pulsos": secuencia_de_pulsos(
         N, ancho_pulso=10, num_pulsos=4, separacion=20
     ),
+    "Chirp lineal (300-3000 Hz)": chirp_lineal(N, fs, f_inicio=300, f_fin=3000),
 }
 
-for nombre, x in senales.items():
+for nombre, x in signals.items():
     X = fft_radix2(x)
     N_fft = len(X)
     frecuencias = np.fft.fftfreq(N_fft, d=1 / fs)
@@ -55,6 +61,6 @@ for nombre, x in senales.items():
 
     fig.tight_layout()
     nombre_archivo = nombre.lower().replace(" ", "_").replace("(", "").replace(")", "").replace(",", "")
-    fig.savefig(f"espectro_{nombre_archivo}.png", dpi=150)
+    fig.savefig(CARPETA_GRAFICAS/f"{nombre_archivo}.png", dpi=150)
     plt.close(fig)
-    print(f"Gráfica guardada: espectro_{nombre_archivo}.png")
+    print(f"Gráfica guardada: {nombre_archivo}.png")
