@@ -7,15 +7,9 @@ def fft_correlation(signal, received):
 
 
     # FFT de ambas señales
-    X = np.fft.fft(
-        signal,
-        N
-    )
+    X = np.fft.fft(signal, N)
 
-    Y = np.fft.fft(
-        received,
-        N
-    )
+    Y = np.fft.fft(received, N)
 
 
     # Correlación en frecuencia
