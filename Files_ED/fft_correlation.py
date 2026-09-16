@@ -1,34 +1,39 @@
+"""Calcula la correlación de señales reales usando la FFT propia de FFT&DFT."""
+
 import numpy as np
 import sys
 from pathlib import Path
-
 
 # ==================================
 # Importar FFT propia
 # ==================================
 
+# Localiza la implementación compartida a partir de la ubicación de este archivo.
 RUTA_FFT = (
     Path(__file__).resolve().parent.parent
     /
     "FFT&DFT"
 )
 
-sys.path.append(
-    str(RUTA_FFT)
+# Prioriza fft.py del proyecto al resolver la importación siguiente.
+sys.path.insert(
+    0, str(RUTA_FFT)
 )
 
-
+# Esta importación debe ir después de configurar la ruta de FFT&DFT.
 from fft import fft_radix2
-
 
 
 def ifft_radix2(X):
 
-    """
-    Implementación de IFFT
-    usando la FFT propia.
+    """Calcula la transformada inversa a partir de fft_radix2.
+
+    X es un espectro complejo de longitud potencia de dos, como el que devuelve
+    fft_radix2. El resultado es un arreglo complejo de la misma longitud.
+    Se usa la identidad IFFT(X) = conj(FFT(conj(X))) / N.
     """
 
+    # La inversa se normaliza por la cantidad de coeficientes del espectro.
     N = len(X)
 
 
@@ -49,14 +54,16 @@ def correlacion_fft(
         recibida):
 
 
+    """Estima el retardo de la señal recibida respecto a la transmitida.
+
+    Las entradas son arreglos unidimensionales de muestras reales. Si X es la
+    FFT de transmitida y Y la FFT de recibida, se calcula IFFT(Y * conj(X)).
+    Devuelve la correlación lineal completa y el retardo del máximo en muestras;
+    un retardo positivo indica que la señal recibida llega después.
     """
-    Correlación mediante FFT.
-
-    Rxy = IFFT(X * conj(Y))
-    """
 
 
-    # Tamaño necesario para correlación lineal
+    # La correlación completa ocupa len(transmitida) + len(recibida) - 1 valores.
 
     N = (
         len(transmitida)
@@ -67,7 +74,9 @@ def correlacion_fft(
     )
 
 
-    # FFT con zero padding
+    # Se agregan ceros para evitar que los extremos se superpongan al calcular
+    # la correlación con FFT. fft_radix2 completa hasta la siguiente potencia
+    # de dos, de modo que X e Y terminan con la misma longitud.
 
     X = fft_radix2(
         np.pad(
@@ -86,19 +95,23 @@ def correlacion_fft(
 
 
 
-    # Producto en frecuencia
+    # El conjugado de X permite correlacionar recibida con transmitida.
+    # Este orden produce retardos positivos para los ecos que llegan después.
 
     R = Y * np.conj(X)
 
 
 
+    # Para señales reales, la parte imaginaria residual se debe al redondeo.
     correlacion = np.real(
         ifft_radix2(R)
     )
 
 
-    # Convertir correlación circular
-    # a representación centrada
+    # La IFFT coloca los retardos negativos al final. Se llevan al inicio y
+    # luego se añaden los retardos desde cero hasta len(recibida) - 1.
+    # Así se obtiene el mismo orden que np.correlate(..., mode="full"),
+    # descartando las posiciones adicionales del relleno con ceros.
 
     correlacion = np.concatenate(
         (
@@ -108,15 +121,18 @@ def correlacion_fft(
     )
 
 
+    # El pico más alto señala el desplazamiento con mayor coincidencia.
     indice_max = np.argmax(
         correlacion
     )
 
 
+    # El retardo cero está en el índice len(transmitida) - 1 del arreglo ordenado.
     retardo = (
         indice_max -
         (len(transmitida)-1)
     )
 
 
+    # Se devuelve la curva para graficarla y el retardo estimado para compararlo.
     return correlacion, retardo
