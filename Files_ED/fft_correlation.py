@@ -1,4 +1,4 @@
-"""Correlación de señales reales mediante la FFT propia, sin operaciones NumPy."""
+"""Correlación de señales reales mediante la FFT propia."""
 
 import sys
 from pathlib import Path
