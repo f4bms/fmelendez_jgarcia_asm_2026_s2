@@ -14,7 +14,6 @@ from fft import fft_radix2
 from signals import (
     tono_puro,
     suma_de_tonos,
-    senal_con_ruido,
     pulso_rectangular,
     secuencia_de_pulsos,
     chirp_lineal,
@@ -132,7 +131,6 @@ def main():
     signals = {
         "Tono puro (500 Hz)": tono_puro(N, fs, f0=500),
         "Suma de tonos (300, 800, 1500 Hz)": suma_de_tonos(N, fs, [300, 800, 1500]),
-        "Tono con ruido (SNR 10 dB)": senal_con_ruido(tono_puro(N, fs, f0=500), snr_db=10),
         "Pulso rectangular (unico)": pulso_rectangular(N, ancho_pulso=20),
         "Secuencia de 4 pulsos": secuencia_de_pulsos(
             N, ancho_pulso=10, num_pulsos=4, separacion=20
