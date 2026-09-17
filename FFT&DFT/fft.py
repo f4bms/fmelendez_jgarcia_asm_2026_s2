@@ -1,5 +1,7 @@
-#n debe de ser potencia de 2 para radix-2 sino ocupamos hacer zero padding
-import numpy as np
+"""FFT radix-2 propia con listas y aritmética compleja de Python, sin NumPy."""
+
+from cmath import exp
+from math import pi
 
 def _siguiente_potencia_de_2(n):
     # Calcula la siguiente potencia de 2 mayor o igual que n.
@@ -38,7 +40,7 @@ def _fft_recursiva(x):
     pares = _fft_recursiva(x[0::2])
     impares = _fft_recursiva(x[1::2])
 
-    X = np.zeros(N, dtype=complex)
+    X = [0j] * N
     mitad = N // 2
 
     # La operación de "mariposa" combina las dos mitades usando el factor de giro.
@@ -50,5 +52,4 @@ def _fft_recursiva(x):
         # F[k + N/2] = E[k] - W_N^k * O[k]
         X[k] = pares[k] + factor_giro
         X[k + mitad] = pares[k] - factor_giro
-
     return X
