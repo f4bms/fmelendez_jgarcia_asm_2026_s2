@@ -1,4 +1,9 @@
-"""Funciones compartidas para graficar señales, espectros y ecos."""
+"""Funciones compartidas para graficar señales, espectros y ecos.
+
+Este archivo ayuda a visualizar señales y también a analizar su contenido en frecuencia.
+Se usa para generar figuras de señales, magnitud y fase, así como para comparar
+la detección de ecos en señales transmitidas y recibidas.
+"""
 
 from pathlib import Path
 
@@ -19,6 +24,7 @@ CARPETA_GRAFICAS = Path(__file__).resolve().parent / "graphics"
 
 
 def _guardar_figura(fig, nombre, carpeta_graficas):
+    # Crea la carpeta si no existe y guarda la figura como imagen PNG.
     carpeta_graficas = Path(carpeta_graficas)
     carpeta_graficas.mkdir(parents=True, exist_ok=True)
     nombre_archivo = (
@@ -40,15 +46,18 @@ def _guardar_figura(fig, nombre, carpeta_graficas):
 
 def guardar_grafica_senal(nombre, x, fs, *, carpeta_graficas=CARPETA_GRAFICAS):
     """Guarda la señal en el tiempo y la magnitud y fase de su FFT."""
+    # Calcula la FFT de la señal para observar su contenido en frecuencia.
     X = fft_radix2(x)
     N_fft = len(X)
     frecuencias = np.fft.fftfreq(N_fft, d=1 / fs)
 
+    # Se toma solo la mitad positiva del espectro.
     mitad = N_fft // 2
     frecuencias_pos = frecuencias[:mitad]
     magnitud = np.abs(X[:mitad])
     fase = np.angle(X[:mitad])
 
+    # Se crean 3 subgráficas: tiempo, magnitud y fase.
     fig, (ax_tiempo, ax_mag, ax_fase) = plt.subplots(3, 1, figsize=(8, 8))
 
     ax_tiempo.plot(x)
@@ -82,6 +91,7 @@ def guardar_grafica_eco(
     carpeta_graficas=CARPETA_GRAFICAS,
 ):
     """Guarda las señales y sus correlaciones para la detección de ecos."""
+    # Muestra 4 gráficas: señal transmitida, señal recibida, correlación directa y correlación FFT.
     fig, axes = plt.subplots(4, 1, figsize=(8, 10))
 
     for ax, senal, titulo in (
@@ -115,7 +125,7 @@ def guardar_grafica_eco(
 
 
 def main():
-    # Datos que se deben modificar según lo que se quiera analizar.
+    # Se crean varias señales para observar su forma y su espectro.
     fs = 8000
     N = 256
 

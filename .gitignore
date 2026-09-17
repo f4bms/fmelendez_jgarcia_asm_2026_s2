@@ -1,2 +1,5 @@
-graphics/*
-__pycache__/
+**/graphics/*
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
