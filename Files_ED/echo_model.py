@@ -1,56 +1,38 @@
-"""Simula un eco con retardo, atenuación y ruido gaussiano aditivo."""
+"""Simula el eco mediante convolución con un impulso atenuado y retrasado."""
 
-import numpy as np
+from operator import index
+from random import gauss
+
+from convolution import convolucion_directa
 
 
-def generar_eco(
-        señal,
-        retardo,
-        atenuacion=0.5,
-        nivel_ruido=0.05):
+def generar_eco(señal, retardo, atenuacion=0.5, nivel_ruido=0.05):
+    """Calcula recibida[n] = (señal * h)[n] + ruido[n].
 
-    """Genera una señal recibida del mismo largo que la transmitida.
-
-    señal:
-        Arreglo unidimensional de muestras reales de la señal transmitida.
-    retardo:
-        Desplazamiento entero en muestras. Este recorte está pensado para
-        un retardo positivo menor que la longitud de la señal.
-    atenuacion:
-        Factor que multiplica la amplitud del eco; 0.5 la reduce a la mitad.
-    nivel_ruido:
-        Desviación estándar del ruido gaussiano de media cero.
-
-    Devuelve el eco desplazado y atenuado más el ruido. La parte del eco
-    que sobrepasa el registro se pierde; no se amplía la señal de salida.
+    h[n] = atenuacion * delta[n-retardo] representa el trayecto del eco.
+    retardo es un entero no negativo en muestras; nivel_ruido es la
+    desviación estándar del ruido gaussiano de media cero.
+    La salida conserva las primeras len(señal) muestras de la convolución.
     """
-
-
     N = len(señal)
+    if N == 0:
+        raise ValueError("La señal no puede estar vacía.")
+    retardo = index(retardo)
+    if retardo < 0:
+        raise ValueError("El retardo no puede ser negativo.")
+    if nivel_ruido < 0:
+        raise ValueError("El nivel de ruido no puede ser negativo.")
 
-    # Las muestras anteriores a la llegada del eco empiezan en cero.
-    eco = np.zeros(N)
+    # Respuesta al impulso: solo hay una muestra no nula en n = retardo.
+    h = [0.0] * (retardo + 1)
+    h[retardo] = float(atenuacion)
 
+    # Se evalúa explícitamente sum_k señal[k] * h[n-k].
+    eco_completo = convolucion_directa(señal, h)
 
-    # Desplaza la señal hacia la derecha: las primeras N-retardo muestras
-    # transmitidas se copian desde la posición retardo y se atenúan.
-    # La cola que quedaría fuera de las N muestras se descarta.
-    eco[retardo:] = (
-        atenuacion *
-        señal[:-retardo]
-    )
-
-
-    # randn genera ruido de media cero y desviación estándar uno.
-    # Multiplicarlo por nivel_ruido ajusta su amplitud; cambia en cada llamada.
-    ruido = (
-        nivel_ruido *
-        np.random.randn(N)
-    )
-
-
-    # El ruido se suma a todo el registro, incluso antes de que llegue el eco.
-    señal_recibida = eco + ruido
-
-
+    señal_recibida = []
+    for n in range(N):
+        # La parte del eco posterior a la ventana de N muestras se descarta.
+        ruido = gauss(0.0, nivel_ruido)
+        señal_recibida.append(eco_completo[n] + ruido)
     return señal_recibida

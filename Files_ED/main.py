@@ -1,4 +1,4 @@
-"""Ejecuta la detección de ecos para tres señales de prueba.
+"""Ejecuta la detección de ecos para las señales de prueba configuradas.
 
 Genera una señal transmitida y su eco, estima el retardo mediante correlación
 directa y mediante FFT, y guarda una gráfica para comparar ambos resultados.
@@ -19,19 +19,15 @@ RUTA_FFT = (
     "FFT&DFT"
 )
 
-# Se priorizan los módulos del proyecto frente a otros con los mismos nombres.
+# Los módulos del proyecto frente a otros con los mismos nombres.
 sys.path.insert(
     0, str(RUTA_FFT)
 )
 
-
 # Generadores compartidos con la etapa de análisis de señales en FFT&DFT.
 from signals import (
-    pulso_rectangular,
-    secuencia_de_pulsos,
     chirp_lineal,
 )
-
 
 # ==========================================
 # Importar módulos propios
@@ -47,7 +43,7 @@ from fft_correlation import (
     correlacion_fft
 )
 
-# Este adaptador usa FFT&DFT/graphics.py y guarda los PNG en Files_ED/graphics.
+# Usa FFT&DFT/graphics.py y guarda los PNG en Files_ED/graphics.
 from plots_echo import (
     guardar_grafica_eco
 )
@@ -84,25 +80,6 @@ RUIDO = 0.05
 
 # Cada nombre identifica una señal y también se usa para nombrar su gráfica.
 signals = {
-
-    # Pulso de 20 muestras ubicado en el centro del registro.
-    "Pulso rectangular":
-        pulso_rectangular(
-            N,
-            ancho_pulso=20
-        ),
-
-
-    # Cuatro pulsos de 10 muestras, con 20 muestras de separación entre ellos.
-    "Secuencia de pulsos":
-        secuencia_de_pulsos(
-            N,
-            ancho_pulso=10,
-            num_pulsos=4,
-            separacion=20
-        ),
-
-
     # Barrido de frecuencia ascendente definido entre 300 y 3000 Hz.
     "Chirp lineal":
         chirp_lineal(
@@ -112,8 +89,6 @@ signals = {
             f_fin=3000
         )
 }
-
-
 
 # ==========================================
 # Experimento de detección de ecos
@@ -129,7 +104,8 @@ for nombre, señal_tx in signals.items():
     # Generación del eco
     # --------------------------------------
 
-    # La señal recibida contiene el eco atenuado y desplazado, más ruido.
+    # El eco se calcula mediante la convolución explícita con h[n] = a*delta[n-d].
+    # La señal recibida contiene ese eco más ruido gaussiano.
     señal_rx = generar_eco(
         señal_tx,
         retardo=RETARDO_ECO,
@@ -137,20 +113,17 @@ for nombre, señal_tx in signals.items():
         nivel_ruido=RUIDO
     )
 
-
-
     # --------------------------------------
     # Correlación directa
     # --------------------------------------
 
-    # Compara las señales en todos los desplazamientos mediante np.correlate.
+    # Evalúa la sumatoria R_yx[m] = sum_n recibida[n] * transmitida[n-m].
+    # Como las señales son reales, el conjugado de transmitida es ella misma.
     # Devuelve la correlación completa y el retardo del máximo en muestras.
     corr_directa, delay_directa = correlacion_directa(
         señal_tx,
         señal_rx
     )
-
-
 
     # --------------------------------------
     # Correlación mediante FFT
@@ -162,8 +135,6 @@ for nombre, señal_tx in signals.items():
         señal_tx,
         señal_rx
     )
-
-
 
     # --------------------------------------
     # Resultados

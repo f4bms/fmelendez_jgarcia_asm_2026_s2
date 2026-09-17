@@ -1,41 +1,36 @@
-"""Método directo de referencia para estimar el retardo de un eco."""
-
-import numpy as np
+"""Correlación directa de señales reales."""
 
 
-def correlacion_directa(
-        transmitida,
-        recibida):
-    """Correlaciona la señal recibida con la transmitida.
+def correlacion_directa(transmitida, recibida):
+    """Devuelve R_yx[m] y el retardo de su máximo, expresado en muestras.
 
-    Las entradas son arreglos unidimensionales de muestras. Devuelve la
-    correlación completa y el retardo de su máximo, expresado en muestras.
-    Un retardo positivo significa que la señal recibida llega después.
+    x es la señal transmitida y y la recibida:
+        R_yx[m] = sum_n y[n] * conjugado(x[n-m]).
+    Para estas señales reales, conjugado(x[n-m]) = x[n-m].
+    Las muestras fuera de cada registro se consideran cero.
     """
+    # Usa números de Python evita operar con escalares NumPy.
+    x = [float(muestra) for muestra in transmitida]
+    y = [float(muestra) for muestra in recibida]
+    if not x or not y:
+        raise ValueError("Las señales no pueden estar vacías.")
 
-    # El orden de las entradas fija el signo del retardo. El modo "full"
-    # incluye los desplazamientos desde -(len(transmitida) - 1)
-    # hasta len(recibida) - 1.
-    correlacion = np.correlate(
-        recibida,
-        transmitida,
-        mode="full"
-    )
+    correlacion = []
+    # Todos los retardos de la correlación lineal, incluidos los negativos.
+    for m in range(-(len(x) - 1), len(y)):
+        suma = 0.0
+        for n in range(len(y)):
+            indice_x = n - m
+            if 0 <= indice_x < len(x):
+                suma += y[n] * x[indice_x]
+        correlacion.append(suma)
 
+    # Busca el máximo explícitamente; en un empate se conserva el primero.
+    indice_max = 0
+    for i in range(1, len(correlacion)):
+        if correlacion[i] > correlacion[indice_max]:
+            indice_max = i
 
-    # Busca el desplazamiento donde las señales presentan mayor coincidencia.
-    indice_max = np.argmax(
-        correlacion
-    )
-
-
-    # Un índice del arreglo no es todavía un retardo: el cero está ubicado
-    # en len(transmitida) - 1, por lo que se resta ese desplazamiento.
-    retardo = (
-        indice_max -
-        (len(transmitida)-1)
-    )
-
-
-    # La curva sirve para las gráficas y el retardo para evaluar la detección.
+    # El primer elemento corresponde al retardo -(len(x) - 1).
+    retardo = indice_max - (len(x) - 1)
     return correlacion, retardo
