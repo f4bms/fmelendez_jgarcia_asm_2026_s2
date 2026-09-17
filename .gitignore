@@ -1,4 +1,5 @@
-graphics/*
-Files_ED/graphics/*
-__pycache__/
-Files_ED/__pycache__/
+**/graphics/*
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
