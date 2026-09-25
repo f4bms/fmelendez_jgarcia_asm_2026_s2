@@ -4,17 +4,18 @@
 // ======================================================================
 // Radar acustico monoestatico - ESP32-WROOM-32 + MAX4466
 // ======================================================================
-// Integra en un solo microcontrolador lo que Transmition.ino solo hace
-// a medias (transmitir el chirp). Este sketch NO modifica Transmition.ino;
-// reutiliza sus mismos parametros y su misma generacion de chirp, y agrega:
+// Version con FIX del bug de truncamiento de PERIODO_MUESTRA_US.
 //
-//   1) Adquisicion del eco mediante ADC (microfono MAX4466).
-//   2) FFT radix-2 propia (iterativa, in-place) - sin librerias de alto nivel.
-//   3) Correlacion cruzada en el dominio de la frecuencia, equivalente a
-//      Files_ED/fft_correlation.py (R = IFFT(Y * conj(X))).
-//   4) Estimacion del retardo (tiempo de vuelo) y calculo de distancia
-//      d = vs * tau / 2.
-//   5) Visualizacion por terminal serial.
+// Problema original: 1000000UL / FS con FS=32000 -> division entera
+// trunca 31.25 a 31, haciendo que el muestreo real corriera a ~32258 Hz
+// en vez de los 32000 Hz asumidos en los calculos (calcularRetardo()).
+// Sobre la ventana de recepcion (1005 muestras) eso acumulaba un error
+// de ~251us -> ~4.3 cm de sesgo sistematico en la distancia estimada.
+//
+// Fix: se usa un acumulador en double con el periodo EXACTO (31.25,
+// sin truncar) para decidir cuando disparar cada muestra. El redondeo
+// solo ocurre al comparar contra micros() (que es entero por naturaleza),
+// pero ya no se arrastra error acumulado de un truncamiento previo.
 //
 // Conexion sugerida del MAX4466: OUT -> GPIO34 (ADC1, solo entrada),
 // VCC -> 3V3, GND -> GND.
@@ -31,10 +32,11 @@ const adc1_channel_t CANAL_MIC = ADC1_CHANNEL_6; // Canal de driver correspondie
 const uint32_t FS = 32000;
 const float F_INICIO = 1500.0;
 const float F_FIN = 11000.0;
-const int N = 20;
+const int N = 100;
 const float DURACION = (float)N / FS;
 
-const uint32_t PERIODO_MUESTRA_US = 1000000UL / FS; // ~31 us entre muestras
+// Periodo EXACTO entre muestras, sin truncar (31.25 us, no 31 us).
+const double PERIODO_MUESTRA_US = 1000000.0 / FS;
 const uint32_t PAUSA_ENTRE_PULSOS_MS = 2000;
 
 // ---------------- Parametros de adquisicion del eco ----------------
@@ -43,7 +45,7 @@ const uint32_t PAUSA_ENTRE_PULSOS_MS = 2000;
 // Ventana de recepcion -> 1005/32000 s ~= 31.4 ms -> rango maximo ~5.3 m.
 const int RX_LEN = 1005;
 const int FFT_LEN = 1024;
-
+//Dato tomado de https://es.wikipedia.org/wiki/Velocidad_del_sonido **Revisar**
 const float VELOCIDAD_SONIDO = 343.0; // m/s (aire ~20 C)
 const int MUESTRAS_CALIBRACION = 200;  // para estimar el nivel DC del MAX4466
 const int MARGEN_MUESTRAS = 5;         // ignora el acople directo cerca de m=0 (~3 cm)
@@ -60,7 +62,8 @@ const float UMBRAL_DETECCION = 1.5f;
 // Serial en formato "nombre:valor" para verla en el Serial Plotter. Alarga
 // bastante cada ciclo (~1000 lineas), asi que se puede poner en false una
 // vez validado el sistema.
-const bool GRAFICAR_CORRELACION = true;
+const bool GRAFICAR_CORRELACION = false;
+const bool GRAFICAR_SENALES = true;
 
 // ---------------- Buffers ----------------
 uint8_t chirp_buffer[N]; // Igual que en Transmition.ino (para el DAC)
@@ -90,13 +93,13 @@ void generarChirp() {
 void transmitirChirp() {
   digitalWrite(PIN_TRIGGER, HIGH); // Flanco de subida = t0
 
-  uint32_t siguiente_muestra_us = micros();
+  double siguiente_muestra_ideal_us = (double)micros();
   for (int n = 0; n < N; n++) {
-    while ((int32_t)(micros() - siguiente_muestra_us) < 0) {
+    while ((int32_t)(micros() - (uint32_t)siguiente_muestra_ideal_us) < 0) {
       // espera activa hasta el instante exacto de esta muestra
     }
     dacWrite(PIN_DAC, chirp_buffer[n]);
-    siguiente_muestra_us += PERIODO_MUESTRA_US;
+    siguiente_muestra_ideal_us += PERIODO_MUESTRA_US;
   }
 
   dacWrite(PIN_DAC, 127);
@@ -108,12 +111,12 @@ void transmitirChirp() {
 // ======================================================================
 
 // Promedia MUESTRAS_CALIBRACION lecturas en silencio para estimar el
-// nivel DC de reposo del MAX4466 (aprox. VCC/2) y poder centrar la senal.
+// nivel DC de reposo del MAX4466 (aprox. VCC/2) y poder centrar la seÃ±al.
 float medirNivelDC() {
   long suma = 0;
   for (int i = 0; i < MUESTRAS_CALIBRACION; i++) {
     suma += adc1_get_raw(CANAL_MIC);
-    delayMicroseconds(PERIODO_MUESTRA_US);
+    delayMicroseconds((uint32_t)PERIODO_MUESTRA_US);
   }
   return (float)suma / MUESTRAS_CALIBRACION;
 }
@@ -123,15 +126,15 @@ float medirNivelDC() {
 // de la ventana (en us) para poder detectar si el ADC no llego al periodo.
 uint32_t adquirirEco(float nivel_dc) {
   uint32_t inicio_us = micros();
-  uint32_t siguiente_muestra_us = inicio_us;
+  double siguiente_muestra_ideal_us = (double)inicio_us;
 
   for (int n = 0; n < RX_LEN; n++) {
-    while ((int32_t)(micros() - siguiente_muestra_us) < 0) {
+    while ((int32_t)(micros() - (uint32_t)siguiente_muestra_ideal_us) < 0) {
       // espera activa hasta el instante exacto de esta muestra
     }
     int cruda = adc1_get_raw(CANAL_MIC);
     rx_buffer[n] = (float)cruda - nivel_dc; // senal centrada en 0
-    siguiente_muestra_us += PERIODO_MUESTRA_US;
+    siguiente_muestra_ideal_us += PERIODO_MUESTRA_US;
   }
 
   return micros() - inicio_us;
@@ -271,6 +274,69 @@ float calcularDistancia(float tau) {
 }
 
 // ======================================================================
+// Visualizacion de seÃ±ales en Serial Plotter
+// ======================================================================
+void graficarSenales(int lag)
+{
+  if (!GRAFICAR_SENALES) return;
+
+
+  // -------------------------------------------------
+  // Chirp transmitido vs seÃ±al recibida
+  // -------------------------------------------------
+
+  Serial.println("=== SEÃ‘AL TRANSMITIDA Y RECIBIDA ===");
+
+  for (int i = 0; i < RX_LEN; i++)
+  {
+    Serial.print("chirp:");
+
+    if (i < N)
+      Serial.print(chirp_ref[i], 3);
+    else
+      Serial.print(0);
+
+
+    Serial.print(",recepcion:");
+    Serial.print(rx_buffer[i], 3);
+
+
+    Serial.print(",pico:0");
+
+    Serial.println();
+  }
+
+
+  delay(500);
+
+
+  // -------------------------------------------------
+  // CorrelaciÃ³n
+  // -------------------------------------------------
+
+  Serial.println("=== CORRELACION ===");
+
+  for (int i = 0; i <= LAG_MAXIMO; i++)
+  {
+    Serial.print("correlacion:");
+    Serial.print(fft2_re[i], 3);
+
+
+    Serial.print(",pico:");
+
+    if (i == lag)
+      Serial.print(fft2_re[i], 3);
+    else
+      Serial.print(0);
+
+
+    Serial.println();
+  }
+}
+
+
+
+// ======================================================================
 // Programa principal
 // ======================================================================
 void setup() {
@@ -309,6 +375,7 @@ void loop() {
   uint32_t duracion_us = adquirirEco(nivel_dc);
 
   int lag = correlacionEcoFFT();
+  graficarSenales(lag);
   float tau = calcularRetardo(lag);
   float distancia = calcularDistancia(tau);
 
@@ -334,7 +401,7 @@ void loop() {
   Serial.print(distancia, 3);
   Serial.println(" m");
 
-  uint32_t esperado_us = (uint32_t)RX_LEN * PERIODO_MUESTRA_US;
+  uint32_t esperado_us = (uint32_t)((double)RX_LEN * PERIODO_MUESTRA_US);
   if (duracion_us > esperado_us + esperado_us / 10) {
     Serial.println("Aviso: el ADC no alcanzo el periodo de muestreo esperado; considere reducir FS.");
   }
